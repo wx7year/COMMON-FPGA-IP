@@ -1,0 +1,31 @@
+# ModelSim / Questa
+sim/work/
+sim/transcript
+sim/vsim.wlf
+sim/*.wlf
+sim/*.vstf
+
+# Vivado Xsim
+sim/xsim.dir/
+sim/*.wdb
+sim/*.jou
+sim/*.log
+sim/*.pb
+
+# 编译产物
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+
+# 编辑器临时文件
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# 系统文件
+Thumbs.db
+.DS_Store
