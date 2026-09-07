@@ -94,6 +94,47 @@ vsim -c tb_ldpc_e2e -do "run -all; quit -f"
 - σ=0.3：BER ≈ 1.25%
 - σ=0.7：BER ≈ 31%（码长仅 32bit，属正常）
 
+## Git 使用
+
+### 首次克隆（其他电脑）
+
+```bash
+git clone git@github.com:wx7year/COMMON-FPGA-IP.git
+```
+
+> 如未配置 SSH key：`ssh-keygen -t ed25519 -C "your_email"`，然后将 `~/.ssh/id_ed25519.pub` 内容添加到 GitHub → Settings → SSH and GPG keys。
+
+### 日常提交
+
+```bash
+git add -A
+git commit -m "修改说明"
+git push
+```
+
+### 拉取最新代码
+
+```bash
+git pull
+```
+
+### 查看状态和历史
+
+```bash
+git status          # 查看修改了哪些文件
+git log --oneline   # 查看提交历史
+git diff            # 查看具体改动
+```
+
+### 已忽略的文件
+
+`.gitignore` 已排除以下内容，不会被提交：
+- `sim/work/` — ModelSim 编译库
+- `sim/xsim.dir/` — Vivado Xsim 编译产物
+- `sim/*.wlf` `sim/*.wdb` — 波形文件
+- `sim/*.log` `sim/*.pb` — 仿真日志
+- 编辑器临时文件（`.vscode/`、`.idea/` 等）
+
 ## 后续计划
 
 1. FFT / FIR 的 RTL 级 ModelSim 仿真（当前仅 Python 算法验证）
