@@ -2,12 +2,17 @@
  * Polar SC Decoder - 5G NR
  * 5G NR Polar 连续消除（SC）译码器
  *
- * 蝶形结构（与 FFT 不同）：
- *   stage s: 成对 (i, i + N/2^(s+1))，i 的低 s 位为 0
- *   左输出：f(a,b) = sign(a)*sign(b)*min(|a|,|b|)
- *   右输出：g(a,b,u) = b + (1-2u)*a
+ * 深度优先遍历：
+ *   Forward：根→叶子，对路径上每个 stage 计算当前节点的所有左子元素（f函数）
+ *   Decision：叶子硬判决（冻结位强制 0）
+ *   Backward：叶子→根，计算右子元素（g函数，用左子叶子判决）
  *
- * 遍历：叶子 0..N-1 顺序，forward 计算左路径 f，backward 计算右路径 g
+ * f(a,b) = sign(a)*sign(b)*min(|a|,|b|)
+ * g(a,b,u) = b + (1-2u)*a
+ *
+ * 蝶形：stage s, half=N/2^(s+1), 节点起始 node_start=leaf-(leaf%(N>>s))
+ *   左子元素：alpha[s+1][node_start+j] = f(alpha[s][node_start+j], alpha[s][node_start+half+j])
+ *   右子元素：alpha[s+1][node_start+half+j] = g(alpha[s][node_start+j], alpha[s][node_start+half+j], u_hat[node_start+j])
  */
 module polar_sc_decoder #(
     parameter integer N         = 64,
@@ -49,20 +54,12 @@ module polar_sc_decoder #(
     reg [N_W-1:0] out_cnt;
 
     reg signed [LLR_WIDTH-1:0] alpha [0:LOG2N][0:N-1];
-    reg beta [0:LOG2N][0:N-1];
-
     reg [0:N-1] u_hat;
 
     assign s_axis_tready = (state == S_LOAD);
 
-    // 当前 stage 的半块大小
-    wire [N_W-1:0] half = N >> (stage[0 +: STAGE_W] + 1);
-    // 当前叶子在 stage 级的块内偏移
-    wire [N_W-1:0] offset = leaf_idx % (N >> stage[0 +: STAGE_W]);
-    // 是否右半部分
-    wire is_right = (offset >= half);
-    // 成对元素索引
-    wire [N_W-1:0] pair_idx = is_right ? (leaf_idx - half) : (leaf_idx + half);
+    // 冻结位：前 N-K 个位置为冻结位（简化，非真实可靠性序列）
+    wire is_frozen = (leaf_idx < (N - K));
 
     // f 函数
     function signed [LLR_WIDTH-1:0] f_func;
@@ -96,7 +93,7 @@ module polar_sc_decoder #(
         end
     endfunction
 
-    integer si, ni;
+    integer si, ni, ji;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state <= S_IDLE;
@@ -130,9 +127,6 @@ module polar_sc_decoder #(
                             state <= S_FORWARD;
                             leaf_idx <= 'd0;
                             stage <= 'd0;
-                            for (si = 0; si <= LOG2N; si = si + 1)
-                                for (ni = 0; ni < N; ni = ni + 1)
-                                    beta[si][ni] <= 1'b0;
                         end else begin
                             load_cnt <= load_cnt + 1'b1;
                         end
@@ -140,15 +134,16 @@ module polar_sc_decoder #(
                 end
 
                 S_FORWARD: begin
+                    // 对当前 stage，若 leaf 在左子树，计算当前节点所有 half 个左子元素
                     if (stage < LOG2N) begin
-                        if (!is_right) begin
-                            // 左子节点：f(alpha[stage][leaf_idx], alpha[stage][pair_idx])
-                            alpha[stage+1][leaf_idx] <= f_func(
-                                alpha[stage][leaf_idx],
-                                alpha[stage][pair_idx]
-                            );
+                        if ((leaf_idx % (N >> stage)) < (N >> (stage+1))) begin
+                            for (ji = 0; ji < (N >> (stage+1)); ji = ji + 1) begin
+                                alpha[stage+1][(leaf_idx - (leaf_idx % (N >> stage))) + ji] <= f_func(
+                                    alpha[stage][(leaf_idx - (leaf_idx % (N >> stage))) + ji],
+                                    alpha[stage][(leaf_idx - (leaf_idx % (N >> stage))) + ji + (N >> (stage+1))]
+                                );
+                            end
                         end
-                        // 右子节点的 g 在 backward 计算
                         stage <= stage + 1'b1;
                     end else begin
                         state <= S_DECISION;
@@ -156,25 +151,26 @@ module polar_sc_decoder #(
                 end
 
                 S_DECISION: begin
-                    u_hat[leaf_idx] <= alpha[LOG2N][leaf_idx[0 +: N_W]][LLR_WIDTH-1];
-                    beta[LOG2N][leaf_idx] <= alpha[LOG2N][leaf_idx[0 +: N_W]][LLR_WIDTH-1];
+                    // 冻结位强制 0，信息位硬判决
+                    if (is_frozen) begin
+                        u_hat[leaf_idx] <= 1'b0;
+                    end else begin
+                        u_hat[leaf_idx] <= alpha[LOG2N][leaf_idx[0 +: N_W]][LLR_WIDTH-1];
+                    end
                     stage <= LOG2N - 1;
                     state <= S_BACKWARD;
                 end
 
                 S_BACKWARD: begin
                     if (stage < LOG2N) begin
-                        if (is_right) begin
-                            // 右子节点：g(alpha[stage][pair_idx], alpha[stage][leaf_idx], beta)
-                            // beta 用左子节点的判决异或
-                            alpha[stage+1][leaf_idx] <= g_func(
-                                alpha[stage][pair_idx],
-                                alpha[stage][leaf_idx],
-                                beta[stage+1][pair_idx[0 +: N_W]]
-                            );
-                        end
-                        // 更新 beta[stage][父节点] = 左子树 ^ 右子树
-                        beta[stage][pair_idx] <= beta[stage+1][pair_idx] ^ beta[stage+1][leaf_idx];
+                        // 计算右子节点中与当前 leaf 对应的元素
+                        // right_idx = node_start + half + (offset % half)
+                        // left_idx  = node_start + (offset % half)
+                        alpha[stage+1][(leaf_idx - (leaf_idx % (N >> stage))) + (N >> (stage+1)) + ((leaf_idx % (N >> stage)) % (N >> (stage+1)))] <= g_func(
+                            alpha[stage][(leaf_idx - (leaf_idx % (N >> stage))) + ((leaf_idx % (N >> stage)) % (N >> (stage+1)))],
+                            alpha[stage][(leaf_idx - (leaf_idx % (N >> stage))) + (N >> (stage+1)) + ((leaf_idx % (N >> stage)) % (N >> (stage+1)))],
+                            u_hat[(leaf_idx - (leaf_idx % (N >> stage))) + ((leaf_idx % (N >> stage)) % (N >> (stage+1)))]
+                        );
 
                         if (stage == 0) begin
                             if (leaf_idx == N - 1) begin

@@ -7,7 +7,7 @@
  *   2. 极化变换（N log2(N)/2 个蝶形，全组合逻辑）
  *   3. 串行输出 N 个编码位
  *
- * 极化变换蝶形：
+ * 极化变换蝶形（F^T=[[1,1],[0,1]]，与译码器 f/g 函数匹配）：
  *   stage s (0..log2N-1):
  *     u = a[i+j], v = a[i+j+2^s]
  *     a[i+j] = u ^ v
@@ -67,7 +67,7 @@ module polar_encoder #(
             localparam integer BLOCK = 1 << (stage + 1);
             for (i = 0; i < N; i = i + BLOCK) begin : gen_block
                 for (j = 0; j < HALF; j = j + 1) begin : gen_butterfly
-                    // 蝶形：a = u ^ v, b = v
+                    // 蝶形：左=a^b, 右=b（与译码器 f/g 函数匹配）
                     assign stage_wires[stage+1][i+j]       = stage_wires[stage][i+j] ^ stage_wires[stage][i+j+HALF];
                     assign stage_wires[stage+1][i+j+HALF]  = stage_wires[stage][i+j+HALF];
                 end
