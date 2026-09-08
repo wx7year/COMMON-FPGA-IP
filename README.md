@@ -12,7 +12,7 @@
 | **Multiplier** | 一般有符号乘法 + 复数乘法 | 可配流水级数; 复数乘法支持 3 乘法(省 DSP)/4 乘法(低延迟) | ModelSim PASS |
 | **Divider** | 恢复余数法有符号除法 | 余数与被除数同号(同 C 语言 %) | ModelSim PASS |
 | **DDS** | 直接数字频率合成器 | 32bit 相位累加器, 1024pt sin/cos LUT, 相位截断+幅度抖动 | ModelSim PASS |
-| **Polar** | Polar 编码器 + SC 译码器 | N=1024, 冻结位生成, 逐次消除 SC 译码 | ModelSim PASS |
+| **Polar** | Polar 编码器 + SCL(L=4)+CRC 译码器 | N=64, K=32, CRC16-CCITT, Bhattacharyya 可靠性序列, 列表译码+CRC辅助选路 | ModelSim PASS (100帧, σ=0.5, BER=0.0069, CRC检出全部错误帧) |
 | **LDPC** | QC-LDPC 编码器 + 分层 Min-Sum 译码器 | BG1/BG2 参数化, CNU 归一化 α=0.75, 可配迭代次数 | 端到端无噪声 BER=0 |
 
 ## 目录结构
@@ -78,7 +78,7 @@ vsim -c tb_ldpc_e2e -do "run -all; quit -f"
 | Divider | `divider_top.v` | `tb_divider.sv` |
 | CORDIC | `cordic_top.v` | `tb_cordic.sv` |
 | DDS | `dds_top.v` | `tb_dds.sv` |
-| Polar | `polar_encoder.v` `polar_sc_decoder.v` | `tb_polar.sv` |
+| Polar | `crc_encoder.v` `polar_encoder.v` `polar_scl_decoder.v` (`q_n_64.vh`) | `tb_polar_scl_e2e.sv` |
 | CNU | `ldpc_cnu.v` | `tb_ldpc_cnu.sv` |
 | LDPC 编码器 | `ldpc_cyclic_shift.v` `ldpc_base_graph_rom.v` `ldpc_encoder.v` | `tb_ldpc.sv` |
 | LDPC 端到端 | 上述 + `ldpc_cnu.v` `ldpc_decoder.v` | `tb_ldpc_e2e.sv` |
@@ -145,7 +145,7 @@ git diff            # 查看具体改动
 
 1. LDPC 填入真实 BG1/BG2 基矩阵，大 ZC 验证
 2. LDPC 译码器加 early termination（syndrome 检查）
-3. Polar 译码器升级为 SCL+CRC（5G NR 实际方案）
+3. Polar 替换为 5G NR TS 38.212 真实 Q_N 序列（当前为 Bhattacharyya 近似），支持 N=1024
 4. 各 IP 核综合资源对比（vs Vivado 官方 IP）
 5. C model 编译验证 + 联合仿真（当前环境无 gcc）
 6. FFT 增加运行时可配置点数（当前固定 1024）
