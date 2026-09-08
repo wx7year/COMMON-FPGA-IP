@@ -41,11 +41,9 @@ module fft_twiddle_rom #(
         end
     end
 
-    reg [2*TWIDDLE_WIDTH-1:0] dout;
+    wire [2*TWIDDLE_WIDTH-1:0] dout;
 
-    always @(posedge clk) begin
-        dout <= rom[addr];
-    end
+    assign dout = rom[addr];  // 异步读，保证地址和数据同周期
 
     assign twiddle_re = dout[TWIDDLE_WIDTH-1:0];
     assign twiddle_im = dout[2*TWIDDLE_WIDTH-1:TWIDDLE_WIDTH];

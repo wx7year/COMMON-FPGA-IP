@@ -61,20 +61,18 @@ module fft_top #(
     wire [DIN_WIDTH-1:0] core_din_q = fwd_inv ? din_q : (~din_q + 1'b1);  // IFFT: Q取反
 
     //==========================================================================
-    // 帧启动逻辑
+    // 帧启动逻辑：组合逻辑生成 start，保证第一个数据和 start 同周期到达 core
     //==========================================================================
-    reg core_start;
+    wire core_start;
     reg [LOG2_N-1:0] in_cnt;
+
+    assign core_start = (in_cnt == 0) && s_axis_tvalid && s_axis_tready;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            core_start <= 1'b0;
             in_cnt <= 'd0;
         end else begin
-            core_start <= 1'b0;
             if (s_axis_tvalid && s_axis_tready) begin
-                if (in_cnt == 0)
-                    core_start <= 1'b1;  // 第一个样点时启动 core
                 if (s_axis_tlast || in_cnt == N-1)
                     in_cnt <= 'd0;
                 else

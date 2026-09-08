@@ -37,7 +37,7 @@ module fir_top #(
     parameter integer NUM_MULT      = (EFF_TAPS + OVERSAMPLE - 1) / OVERSAMPLE,  // 至少1
     parameter integer TAPS_PER_MULT = (EFF_TAPS + NUM_MULT - 1) / NUM_MULT,
     parameter integer ACC_WIDTH     = DATA_WIDTH + COEFF_WIDTH + $clog2(TAPS_PER_MULT) + 2,
-    parameter integer SUM_WIDTH     = ACC_WIDTH + $clog2(NUM_MULT) + 1,
+    parameter integer SUM_WIDTH     = ACC_WIDTH + $clog2(NUM_MULT),
     parameter integer OUT_WIDTH     = DATA_WIDTH + COEFF_WIDTH + $clog2(NUM_TAPS) + 1
 )(
     input  wire                         clk,
@@ -132,7 +132,7 @@ module fir_top #(
                 S_OUT: begin
                     m_axis_tvalid <= 1'b1;
                     m_axis_tlast <= in_tlast_r;
-                    if (m_axis_tready) begin
+                    if (m_axis_tready && m_axis_tvalid) begin
                         state <= S_IDLE;
                         m_axis_tvalid <= 1'b0;
                         m_axis_tlast <= 1'b0;
@@ -146,7 +146,7 @@ module fir_top #(
     // 多 MAC 通道（generate 自动生成 NUM_MULT 个）
     // 每个通道处理 TAPS_PER_MULT 个连续抽头
     //==========================================================================
-    wire [ACC_WIDTH-1:0] mac_out [0:NUM_MULT-1];
+    wire signed [ACC_WIDTH-1:0] mac_out [0:NUM_MULT-1];
     wire mac_channel_active = (state == S_MAC) && (mac_cnt < TAPS_PER_MULT);
 
     genvar m;
@@ -179,18 +179,18 @@ module fir_top #(
                     prod_r <= 'd0;
                 else if (mac_channel_active && tap_valid)
                     prod_r <= $signed(pre_add) * coeff;
-                else if (mac_channel_active)
-                    prod_r <= 'd0;  // 超出范围的抽头乘0
+                else
+                    prod_r <= 'd0;  // 非活跃时清零，防止残留被多累加
             end
 
-            // 累加
+            // 累加（S_MAC 全程累加，补偿 prod_r 1 拍延迟）
             reg signed [ACC_WIDTH-1:0] acc_r;
             always @(posedge clk or negedge rst_n) begin
                 if (!rst_n) begin
                     acc_r <= 'd0;
                 end else if (state == S_IDLE) begin
                     acc_r <= 'd0;
-                end else if (mac_channel_active) begin
+                end else if (state == S_MAC) begin
                     acc_r <= acc_r + prod_r;
                 end
             end
@@ -211,7 +211,7 @@ module fir_top #(
             sum_r = sum_r + mac_out[s];
     end
 
-    // 输出截断到 OUT_WIDTH（取高位）
-    assign m_axis_tdata = sum_r[SUM_WIDTH-1 -: OUT_WIDTH];
+    // 输出直接取 SUM_WIDTH 位（与 OUT_WIDTH 相同）
+    assign m_axis_tdata = sum_r;
 
 endmodule

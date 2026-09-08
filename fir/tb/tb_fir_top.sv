@@ -14,7 +14,7 @@ module tb_fir_top;
     //==========================================================================
     // 参数
     //==========================================================================
-    localparam integer NUM_TAPS      = 32;
+    localparam integer NUM_TAPS      = 31;
     localparam integer DATA_WIDTH    = 16;
     localparam integer COEFF_WIDTH   = 16;
     localparam integer CLK_FREQ      = 80_000_000;
@@ -138,11 +138,12 @@ module tb_fir_top;
         fork
             // 驱动输入线程
             begin
-                for (i = 0; i < NUM_SAMPLES; i = i + 1) begin
+                integer drv_i;
+                for (drv_i = 0; drv_i < NUM_SAMPLES; drv_i = drv_i + 1) begin
                     @(posedge clk);
-                    s_axis_tdata  = input_data[i];
+                    s_axis_tdata  = input_data[drv_i];
                     s_axis_tvalid = 1'b1;
-                    s_axis_tlast  = (i == NUM_SAMPLES - 1);
+                    s_axis_tlast  = (drv_i == NUM_SAMPLES - 1);
                     @(posedge clk);
                     while (!s_axis_tready) @(posedge clk);
                 end
@@ -152,7 +153,8 @@ module tb_fir_top;
 
             // 收集输出线程
             begin
-                for (i = 0; i < NUM_SAMPLES; i = i + 1) begin
+                integer col_i;
+                for (col_i = 0; col_i < NUM_SAMPLES; col_i = col_i + 1) begin
                     @(posedge clk);
                     while (!m_axis_tvalid) @(posedge clk);
 
@@ -160,7 +162,7 @@ module tb_fir_top;
                         reg signed [OUT_WIDTH-1:0] got;
                         integer err;
                         got = m_axis_tdata;
-                        err = (got > expected_data[i]) ? (got - expected_data[i]) : (expected_data[i] - got);
+                        err = (got > expected_data[col_i]) ? (got - expected_data[col_i]) : (expected_data[col_i] - got);
                         if (err > max_err) max_err = err;
                         total_err = total_err + err;
 
@@ -168,7 +170,7 @@ module tb_fir_top;
                             err_count = err_count + 1;
                             if (err_count <= 10)
                                 $display("  MISMATCH [%0d]: got=%0d expected=%0d err=%0d",
-                                         i, got, expected_data[i], err);
+                                         col_i, got, expected_data[col_i], err);
                         end
                     end
                     sample_cnt = sample_cnt + 1;

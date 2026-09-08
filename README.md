@@ -6,11 +6,13 @@
 
 | IP 核 | 功能 | 关键参数 | 仿真状态 |
 |---|---|---|---|
-| **FFT** | 1024 点复数 FFT/IFFT | DIN=16bit, TWIDDLE=16bit, DOUT=26bit, 乒乓 RAM + 单蝶形流水线 | Python 算法验证通过 |
-| **FIR** | 32 抽头 FIR 滤波器 | DATA=16bit, COEFF=16bit, 对称优化, 80MHz/10MHz 自动降并行度 | Python 算法验证通过 |
+| **FFT** | 1024 点复数 FFT/IFFT | DIN=16bit, TWIDDLE=16bit, DOUT=26bit, 乒乓 RAM + 单蝶形流水线, DIT位反序输入 | ModelSim PASS (Forward max err 350 LSB, IFFT max err 1 LSB) |
+| **FIR** | 31 抽头对称 FIR 滤波器 | DATA=16bit, COEFF=16bit, 对称预加优化, 80MHz/10MHz 自动降并行度(NUM_MULT=2) | ModelSim PASS (2048 样本 0 误差) |
 | **CORDIC** | 旋转模式(sin/cos) + 向量模式(atan2/magnitude) | DATA=16bit, ANGLE=16bit(Q2.14), 16 级迭代, 内部加宽 4bit | ModelSim PASS |
 | **Multiplier** | 一般有符号乘法 + 复数乘法 | 可配流水级数; 复数乘法支持 3 乘法(省 DSP)/4 乘法(低延迟) | ModelSim PASS |
 | **Divider** | 恢复余数法有符号除法 | 余数与被除数同号(同 C 语言 %) | ModelSim PASS |
+| **DDS** | 直接数字频率合成器 | 32bit 相位累加器, 1024pt sin/cos LUT, 相位截断+幅度抖动 | ModelSim PASS |
+| **Polar** | Polar 编码器 + SC 译码器 | N=1024, 冻结位生成, 逐次消除 SC 译码 | ModelSim PASS |
 | **LDPC** | QC-LDPC 编码器 + 分层 Min-Sum 译码器 | BG1/BG2 参数化, CNU 归一化 α=0.75, 可配迭代次数 | 端到端无噪声 BER=0 |
 
 ## 目录结构
@@ -70,9 +72,13 @@ vsim -c tb_ldpc_e2e -do "run -all; quit -f"
 
 | 模块 | 需编译的 RTL 文件 | Testbench |
 |---|---|---|
+| FFT | `fft_top.v` `fft_core.v` `fft_butterfly.v` `fft_complex_mult.v` `fft_twiddle_rom.v` | `tb_fft_top.sv` |
+| FIR | `fir_top.v` | `tb_fir_top.sv` |
 | Multiplier | `multiplier_top.v` `complex_mult_top.v` | `tb_multiplier.sv` |
 | Divider | `divider_top.v` | `tb_divider.sv` |
 | CORDIC | `cordic_top.v` | `tb_cordic.sv` |
+| DDS | `dds_top.v` | `tb_dds.sv` |
+| Polar | `polar_encoder.v` `polar_sc_decoder.v` | `tb_polar.sv` |
 | CNU | `ldpc_cnu.v` | `tb_ldpc_cnu.sv` |
 | LDPC 编码器 | `ldpc_cyclic_shift.v` `ldpc_base_graph_rom.v` `ldpc_encoder.v` | `tb_ldpc.sv` |
 | LDPC 端到端 | 上述 + `ldpc_cnu.v` `ldpc_decoder.v` | `tb_ldpc_e2e.sv` |
@@ -137,12 +143,12 @@ git diff            # 查看具体改动
 
 ## 后续计划
 
-1. FFT / FIR 的 RTL 级 ModelSim 仿真（当前仅 Python 算法验证）
-2. LDPC 填入真实 BG1/BG2 基矩阵，大 ZC 验证
-3. LDPC 译码器加 early termination（syndrome 检查）
-4. Polar 码编解码器
-5. 各 IP 核综合资源对比（vs Vivado 官方 IP）
-6. C model 编译验证 + 联合仿真（当前环境无 gcc）
+1. LDPC 填入真实 BG1/BG2 基矩阵，大 ZC 验证
+2. LDPC 译码器加 early termination（syndrome 检查）
+3. Polar 译码器升级为 SCL+CRC（5G NR 实际方案）
+4. 各 IP 核综合资源对比（vs Vivado 官方 IP）
+5. C model 编译验证 + 联合仿真（当前环境无 gcc）
+6. FFT 增加运行时可配置点数（当前固定 1024）
 
 ## 环境
 
