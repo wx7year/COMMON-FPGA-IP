@@ -1,30 +1,26 @@
 /*
- * Polar SCL End-to-End Testbench
+ * Polar SCL End-to-End Testbench - N=1024
  * Polar SCL 端到端测试：编码→BPSK→AWGN→SCL译码→CRC校验
+ * 5G NR TS 38.212 真实可靠性序列 Q_N
  *
- * 流程：
- *   1. 生成 K 个随机信息位
- *   2. Polar 编码（含 CRC16）
- *   3. BPSK 调制 + AWGN 加噪，生成 LLR
- *   4. SCL 译码（L=4）
- *   5. 比对输入/输出，统计 BER，检查 CRC
+ * 编译时需加 +define+POLAR_N_1024
  */
 
 `timescale 1ns / 1ps
 
-module tb_polar_scl_e2e;
+module tb_polar_scl_e2e_1024;
 
     //==========================================================================
     // 参数
     //==========================================================================
-    localparam integer N         = 64;
-    localparam integer K         = 32;
+    localparam integer N         = 1024;
+    localparam integer K         = 256;
     localparam integer CRC_LEN   = 16;
     localparam integer L         = 4;
     localparam integer LLR_WIDTH = 6;
     localparam integer PM_WIDTH  = 16;
-    localparam integer NUM_FRAMES = 100;  // 测试帧数
-    localparam real    NOISE_SIGMA = 0.5; // AWGN 标准差
+    localparam integer NUM_FRAMES = 20;   // 测试帧数
+    localparam real    NOISE_SIGMA = 0.5; // AWGN 标准差 (9dB)
 
     //==========================================================================
     // 信号
@@ -96,7 +92,7 @@ module tb_polar_scl_e2e;
     integer seed;
 
     //==========================================================================
-    // AWGN 噪声生成（Box-Muller 简化版：4 个均匀分布相加近似高斯）
+    // AWGN 噪声生成（12 个均匀分布相加近似高斯）
     //==========================================================================
     function real awgn;
         input integer seed_in;
@@ -121,7 +117,7 @@ module tb_polar_scl_e2e;
     // 主测试
     //==========================================================================
     initial begin
-        $display("=== Polar SCL End-to-End Test ===");
+        $display("=== Polar SCL End-to-End Test (N=1024, 3GPP Q_N) ===");
         $display("  N=%0d, K=%0d, CRC=%0d, L=%0d, sigma=%.2f", N, K, CRC_LEN, L, NOISE_SIGMA);
         $display("  Frames=%0d", NUM_FRAMES);
 
@@ -168,7 +164,6 @@ module tb_polar_scl_e2e;
 
             // 3. BPSK + AWGN -> LLR
             for (bit_i = 0; bit_i < N; bit_i = bit_i + 1) begin
-                // BPSK + AWGN -> LLR
                 begin
                     real x, y, llr_real;
                     integer llr_int;
@@ -237,7 +232,7 @@ module tb_polar_scl_e2e;
 
     // 超时保护
     initial begin
-        #5000000;  // 5ms
+        #50000000;  // 50ms
         $display("ERROR: Timeout!");
         $finish;
     end

@@ -45,10 +45,23 @@ module polar_encoder #(
 );
 
     //==========================================================================
-    // Q_N 可靠性序列（从 q_n_{N}.vh 加载）
+    // Q_N 可靠性序列（5G NR TS 38.212 Table 5.3.1.2-1）
+    // 编译时用 +define+POLAR_N_1024 等选择对应长度，默认 N=64
     // Q_N[0] = 最不可靠, Q_N[N-1] = 最可靠
     //==========================================================================
-    `include "q_n_64.vh"  // 定义 localparam [LOG2N-1:0] Q_N [0:N-1]
+    `ifdef POLAR_N_1024
+    `include "q_n_1024.vh"
+    `elsif POLAR_N_512
+    `include "q_n_512.vh"
+    `elsif POLAR_N_256
+    `include "q_n_256.vh"
+    `elsif POLAR_N_128
+    `include "q_n_128.vh"
+    `elsif POLAR_N_32
+    `include "q_n_32.vh"
+    `else
+    `include "q_n_64.vh"
+    `endif
 
     //==========================================================================
     // CRC 编码器
